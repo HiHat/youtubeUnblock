@@ -7,7 +7,7 @@ PKG_VERSION:=1.1.1
 PKG_REV:=07334c598dc1b903b40f8c8fa04c5857d1664156
 PKG_RELEASE:=1
 
-PKG_SOURCE_URL:=https://github.com/Waujito/youtubeUnblock.git
+PKG_SOURCE_URL:=https://github.com/HiHat/youtubeUnblock.git
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_VERSION:=$(PKG_REV)
 
@@ -18,8 +18,8 @@ define Package/youtubeUnblock
 	CATEGORY:=Networking
 	TITLE:=youtubeUnblock
 	DEPENDS:=+libpthread
-	URL:=https://github.com/Waujito/youtubeUnblock
-	MAINTAINER:=Vadim Vetrov <vetrovvd@gmail.com>
+	URL:=https://github.com/HiHat/youtubeUnblock
+	MAINTAINER:=Andrey Zotikov <andrey.zotikov@gmail.com>
 	VERSION:=$(PKG_VERSION)~$(shell echo $(PKG_REV) | cut -c 1-7)-r$(PKG_RELEASE)
 endef
 
