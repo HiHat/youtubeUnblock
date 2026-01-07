@@ -255,6 +255,69 @@ erret:
 }
 
 // Allocates and fills custom fake buffer
+static int parse_frag_sni_positions(const char *str, size_t **positions, unsigned int *pos_count) {
+	int count = 1;
+	const char *p = str;
+	while (*p != '\0') {
+		if (*p == ',')
+			count++;
+		p++;
+	}
+	
+#ifdef KERNEL_SPACE
+	size_t *pos_array = kmalloc(count * sizeof(size_t), GFP_KERNEL);
+#else
+	size_t *pos_array = malloc(count * sizeof(size_t));
+#endif
+	if (pos_array == NULL) {
+		return -ENOMEM;
+	}
+
+	int i = 0;
+	p = str;
+	const char *ep = p;
+	while (1) {
+		if (*ep == '\0' || *ep == ',') {
+			if (ep == p) {
+				if (*ep == '\0')
+					break;
+				p++, ep++;
+				continue;
+			}
+
+			long num;
+			int len;
+			sscanf(p, "%ld%n", &num, &len);
+			
+			if (num < 0 || num > AVAILABLE_MTU) {
+				free(pos_array);
+				return -EINVAL;
+			}
+			
+			pos_array[i++] = (size_t)num;
+
+			if (*ep == '\0') {
+				break;
+			} else {
+				p = ep + 1;
+				ep = p;
+			}
+		} else {
+			ep++;
+		}
+	}
+
+	if (i == 0) {
+		free(pos_array);
+		return -EINVAL;
+	}
+
+	*positions = pos_array;
+	*pos_count = i;
+	return 0;
+}
+
+// Allocates and fills custom fake buffer
 static int parse_fake_custom_payload(
 	const char *custom_hex_fake,
 	char **custom_fake_buf, unsigned int *custom_fake_len) {
@@ -432,7 +495,7 @@ void print_usage(const char *argv0) {
 	printf("\t--frag-sni-reverse={0|1}\n");
 	printf("\t--frag-sni-faked={0|1}\n");
 	printf("\t--frag-middle-sni={0|1}\n");
-	printf("\t--frag-sni-pos=<pos>\n");
+	printf("\t--frag-sni-pos=<pos1,pos2,...>\n");
 	printf("\t--fk-winsize=<winsize>\n");
 	printf("\t--quic-drop\n");
 	printf("\t--sni-detection={parse|brute}\n");
@@ -722,13 +785,13 @@ int yparse_args(struct config_t *config, int argc, char *argv[]) {
 
 			break;
 		case OPT_FRAG_SNI_POS:
-			num = parse_numeric_option(optarg);
-			if (errno != 0 || num < 0) {
+		{
+			SFREE(sect_config->frag_sni_positions);
+			if (parse_frag_sni_positions(optarg, &sect_config->frag_sni_positions, &sect_config->frag_sni_pos_count) < 0) {
 				goto invalid_opt;
 			}
-
-			sect_config->frag_sni_pos = num;
 			break;
+		}
 		case OPT_FAKING_STRATEGY:
 			if (strcmp(optarg, "randseq") == 0) {
 				sect_config->faking_strategy = FAKE_STRAT_RAND_SEQ;
@@ -1016,7 +1079,18 @@ static size_t print_config_section(const struct section_config_t *section, char 
 		print_cnf_buf("--frag-sni-reverse=%d", section->frag_sni_reverse);
 		print_cnf_buf("--frag-sni-faked=%d", section->frag_sni_faked);
 		print_cnf_buf("--frag-middle-sni=%d", section->frag_middle_sni);
-		print_cnf_buf("--frag-sni-pos=%d", section->frag_sni_pos);
+		if (section->frag_sni_pos_count > 0) {
+			print_cnf_raw("--frag-sni-pos=");
+			for (unsigned int i = 0; i < section->frag_sni_pos_count; i++) {
+				print_cnf_raw("%zu", section->frag_sni_positions[i]);
+				if (i < section->frag_sni_pos_count - 1) {
+					print_cnf_raw(",");
+				}
+			}
+			print_cnf_raw(" ");
+		} else {
+			print_cnf_buf("--frag-sni-pos=%d", section->frag_sni_pos);
+		}
 		print_cnf_buf("--fk-winsize=%d", section->fk_winsize);
 
 		if (section->fake_sni) {
@@ -1272,6 +1346,10 @@ int init_config(struct config_t *config) {
 void free_config_section(struct section_config_t *section) {
 	if (section->udp_dport_range_len != 0) {
 		SFREE(section->udp_dport_range);
+	}
+
+	if (section->frag_sni_pos_count != 0) {
+		SFREE(section->frag_sni_positions);
 	}
 
 	free_sni_domains(&section->sni_domains);

@@ -340,7 +340,7 @@ int process_tcp_packet(const struct section_config_t *section, const uint8_t *ra
 		size_t mid_offset;
 
 		switch (section->fragmentation_strategy) {
-		case FRAG_STRAT_TCP: 
+		case FRAG_STRAT_TCP:
 		{
 			ipd_offset = target_sni_offset;
 			mid_offset = ipd_offset + vrd.target_sni_len / 2;
@@ -350,28 +350,55 @@ int process_tcp_packet(const struct section_config_t *section, const uint8_t *ra
 			// it is possible for the entire domain to not be
 			// splitted (split goes for subdomain)
 			if (vrd.target_sni_len > 30) {
-				mid_offset = ipd_offset + 
+				mid_offset = ipd_offset +
 					vrd.target_sni_len - 12;
 			}
 
-			size_t poses[2];
+			// Calculate total number of fragmentation positions
 			int cnt = 0;
-
-			if (section->frag_sni_pos && dlen > section->frag_sni_pos) {
-				poses[cnt++] = section->frag_sni_pos;
+			if (section->frag_sni_pos_count > 0) {
+				cnt += section->frag_sni_pos_count;
 			}
-
 			if (section->frag_middle_sni) {
-				poses[cnt++] = mid_offset;
+				cnt++;
 			}
 
-			if (cnt > 1 && poses[0] > poses[1]) {
-				size_t tmp = poses[0];
-				poses[0] = poses[1];
-				poses[1] = tmp;
+			// Allocate array for positions
+			size_t *poses = NULL;
+			if (cnt > 0) {
+				poses = malloc(cnt * sizeof(size_t));
+				if (poses == NULL) {
+					lgerror(-ENOMEM, "Allocation error for poses array");
+					goto accept_lc;
+				}
 			}
 
-			ret = send_tcp_frags(section, payload, payload_len, poses, cnt, 0);
+			// Fill positions array
+			int pos_idx = 0;
+			for (unsigned int i = 0; i < section->frag_sni_pos_count; i++) {
+				if (section->frag_sni_positions[i] < dlen) {
+					poses[pos_idx++] = section->frag_sni_positions[i];
+				}
+			}
+			if (section->frag_middle_sni) {
+				poses[pos_idx++] = mid_offset;
+			}
+
+			// Sort positions
+			for (int i = 0; i < pos_idx - 1; i++) {
+				for (int j = i + 1; j < pos_idx; j++) {
+					if (poses[i] > poses[j]) {
+						size_t tmp = poses[i];
+						poses[i] = poses[j];
+						poses[j] = tmp;
+					}
+				}
+			}
+
+			ret = send_tcp_frags(section, payload, payload_len, poses, pos_idx, 0);
+			if (poses) {
+				free(poses);
+			}
 			if (ret < 0) {
 				lgerror(ret, "tcp4 send frags");
 				goto accept_lc;
@@ -380,32 +407,65 @@ int process_tcp_packet(const struct section_config_t *section, const uint8_t *ra
 			goto drop_lc;
 		}
 		break;
-		case FRAG_STRAT_IP: 
+		case FRAG_STRAT_IP:
 		if (ipxv == IP4VERSION) {
 			ipd_offset = ((char *)data - (char *)tcph) + target_sni_offset;
 			mid_offset = ipd_offset + vrd.target_sni_len / 2;
 			mid_offset += 8 - mid_offset % 8;
 
-			size_t poses[2];
+			// Calculate total number of fragmentation positions
 			int cnt = 0;
-
 			if (section->frag_sni_pos && dlen > section->frag_sni_pos) {
-				poses[cnt] = section->frag_sni_pos + ((char *)data - (char *)tcph);
-				poses[cnt] += 8 - poses[cnt] % 8;
 				cnt++;
 			}
-
 			if (section->frag_middle_sni) {
-				poses[cnt++] = mid_offset;
+				cnt++;
+			}
+			cnt += section->frag_sni_pos_count;
+
+			// Allocate array for positions
+			size_t *poses = NULL;
+			if (cnt > 0) {
+				poses = malloc(cnt * sizeof(size_t));
+				if (poses == NULL) {
+					lgerror(-ENOMEM, "Allocation error for poses array");
+					goto accept_lc;
+				}
 			}
 
-			if (cnt > 1 && poses[0] > poses[1]) {
-				size_t tmp = poses[0];
-				poses[0] = poses[1];
-				poses[1] = tmp;
+			// Fill positions array
+			int pos_idx = 0;
+			if (section->frag_sni_pos && dlen > section->frag_sni_pos) {
+				poses[pos_idx] = section->frag_sni_pos + ((char *)data - (char *)tcph);
+				poses[pos_idx] += 8 - poses[pos_idx] % 8;
+				pos_idx++;
+			}
+			if (section->frag_middle_sni) {
+				poses[pos_idx++] = mid_offset;
+			}
+			for (unsigned int i = 0; i < section->frag_sni_pos_count; i++) {
+				size_t pos = section->frag_sni_positions[i] + ((char *)data - (char *)tcph);
+				pos += 8 - pos % 8;
+				if (pos < dlen + ((char *)data - (char *)tcph)) {
+					poses[pos_idx++] = pos;
+				}
 			}
 
-			ret = send_ip4_frags(section, payload, payload_len, poses, cnt, 0);
+			// Sort positions
+			for (int i = 0; i < pos_idx - 1; i++) {
+				for (int j = i + 1; j < pos_idx; j++) {
+					if (poses[i] > poses[j]) {
+						size_t tmp = poses[i];
+						poses[i] = poses[j];
+						poses[j] = tmp;
+					}
+				}
+			}
+
+			ret = send_ip4_frags(section, payload, payload_len, poses, pos_idx, 0);
+			if (poses) {
+				free(poses);
+			}
 			if (ret < 0) {
 				lgerror(ret, "ip4 send frags");
 				goto accept_lc;
@@ -413,7 +473,7 @@ int process_tcp_packet(const struct section_config_t *section, const uint8_t *ra
 
 			goto drop_lc;
 		} else {
-			lginfo("WARNING: IP fragmentation is supported only for IPv4");	
+			lginfo("WARNING: IP fragmentation is supported only for IPv4");
 			goto default_send;
 		}
 		break;

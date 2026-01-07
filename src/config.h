@@ -70,6 +70,8 @@ struct section_config_t {
 	int faking_strategy;
 	int frag_middle_sni;
 	int frag_sni_pos;
+	unsigned int frag_sni_pos_count;
+	size_t *frag_sni_positions;
 	unsigned char faking_ttl;
 	int fake_sni;
 	unsigned int fake_sni_seq_len;
@@ -248,13 +250,15 @@ enum {
 	.fake_custom_pkt_sz = 0,				\
 	.frag_middle_sni = 1,                                   \
 	.frag_sni_pos = 1,                                      \
+	.frag_sni_pos_count = 0,				\
+	.frag_sni_positions = NULL,				\
 	.fakeseq_offset = 10000,                                \
 	.synfake = 0,                                           \
 	.synfake_len = 0,                                       \
-                                                                \
+	                                                                  \
 	.dport_filter = 1,	                                \
 	.seg2_delay = 0,                                        \
-                                                                \
+	                                                                  \
 	.sni_detection = SNI_DETECTION_PARSE,                   \
 								\
 	.udp_mode = UDP_MODE_FAKE,				\
