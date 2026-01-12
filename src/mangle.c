@@ -362,6 +362,7 @@ int process_tcp_packet(const struct section_config_t *section, const uint8_t *ra
 			if (section->frag_middle_sni) {
 				cnt++;
 			}
+			lgdebug("Total number of frags: %d", cnt);
 
 			// Allocate array for positions
 			size_t *poses = NULL;
@@ -383,6 +384,7 @@ int process_tcp_packet(const struct section_config_t *section, const uint8_t *ra
 			if (section->frag_middle_sni) {
 				poses[pos_idx++] = mid_offset;
 			}
+			lgdebug("Total number of poses: %d", pos_idx);
 
 			// Sort positions
 			for (int i = 0; i < pos_idx - 1; i++) {
@@ -393,6 +395,7 @@ int process_tcp_packet(const struct section_config_t *section, const uint8_t *ra
 						poses[j] = tmp;
 					}
 				}
+				lgdebug("Pos[%d]: %d", i,poses[i]);
 			}
 
 			ret = send_tcp_frags(section, payload, payload_len, poses, pos_idx, 0);
