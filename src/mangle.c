@@ -362,7 +362,6 @@ int process_tcp_packet(const struct section_config_t *section, const uint8_t *ra
 			if (section->frag_middle_sni) {
 				cnt++;
 			}
-			lgdebug("Total number of frags: %d", cnt);
 
 			// Allocate array for positions
 			size_t *poses = NULL;
@@ -377,14 +376,15 @@ int process_tcp_packet(const struct section_config_t *section, const uint8_t *ra
 			// Fill positions array
 			int pos_idx = 0;
 			for (unsigned int i = 0; i < section->frag_sni_pos_count; i++) {
-				if (section->frag_sni_positions[i] < dlen) {
-					poses[pos_idx++] = section->frag_sni_positions[i];
+				if (section->frag_sni_positions[i] < vrd.target_sni_len) {
+					poses[pos_idx++] = ipd_offset + section->frag_sni_positions[i];
 				}
 			}
 			if (section->frag_middle_sni) {
 				poses[pos_idx++] = mid_offset;
 			}
 			lgdebug("Total number of poses: %d", pos_idx);
+			lgdebug("ipd_offset: %d", ipd_offset);
 
 			// Sort positions
 			for (int i = 0; i < pos_idx - 1; i++) {
@@ -395,7 +395,11 @@ int process_tcp_packet(const struct section_config_t *section, const uint8_t *ra
 						poses[j] = tmp;
 					}
 				}
-				lgdebug("Pos[%d]: %d", i,poses[i]);
+				lgdebug("Pos[%d]: %d", i, poses[i]);
+			}
+			// Print last position if more than 2
+			if (pos_idx > 0) {
+				lgdebug("Pos[%d]: %d", pos_idx - 1, poses[pos_idx - 1]);
 			}
 
 			ret = send_tcp_frags(section, payload, payload_len, poses, pos_idx, 0);

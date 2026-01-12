@@ -128,7 +128,7 @@ jobs:
     needs: prepare
     runs-on: ubuntu-latest
     container:
-      image: openwrt/sdk:x86_64-openwrt-23.05
+      image: openwrt/sdk:x86_64-openwrt-24.10
       options: --user root
     steps:
       - name: Checkout
