@@ -45,7 +45,7 @@ jobs:
     strategy:
       matrix:
         branch:
-          - openwrt-23.05
+          - openwrt-24.10
         arch:
           - aarch64_cortex-a53
 #          - aarch64_cortex-a72
