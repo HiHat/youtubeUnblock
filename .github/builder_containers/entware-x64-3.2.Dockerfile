@@ -1,5 +1,5 @@
 FROM hihat1st/entware-builder
-RUN git clone --depth 1 https://github.com/HiHat/Entware.git
+RUN git clone --depth 1 https://github.com/Entware/Entware.git
 WORKDIR /home/me/Entware
 RUN make package/symlinks
 RUN cp -v configs/x64-3.2.config .config
