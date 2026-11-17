@@ -1,4 +1,4 @@
-FROM waujito/entware_builder
+FROM hihat1st/entware-builder
 RUN git clone --depth 1 https://github.com/Entware/Entware.git -b k2.6
 WORKDIR /home/me/Entware
 RUN make package/symlinks
